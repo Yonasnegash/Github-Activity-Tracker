@@ -1,7 +1,36 @@
 const https = require('https')
 const readline = require('readline')
+const fs = require('fs')
+const path = require('path')
+
+const CACHE_DIR = path.join(__dirname, '.cache')
 
 const usernameFromArg = process.argv[2]
+
+if (!fs.existsSync(CACHE_DIR)) {
+  fs.mkdirSync(CACHE_DIR)
+}
+
+function loadFromCatche(username) {
+  const filePath = path.join(CACHE_DIR, `${username}.json`)
+
+  if(!fs.existsSync(filePath)) return null
+
+  const stats = fs.statSync(filePath)
+  const cacheAge = (Date.now() - stats.mtime) / (1000 * 60)
+
+  if (cacheAge < 10) {
+    const data = fs.readFileSync(filePath, 'utf8')
+    return JSON.parse(data)
+  }
+
+  return null
+}
+
+function saveToCache(username, data) {
+  const filePath = path.join(CACHE_DIR, `${username}.json`)
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8')
+}
 
 function prompt(callback) {
     const rl = readline.createInterface({
@@ -104,7 +133,16 @@ async function main() {
   try {
     const username = await getUsername();
     console.log(`Fetching activity for ${username}...`);
+
+    const cached = loadFromCatche(username)
+    if (cached) {
+      console.log('(Loaded from cache')
+      displayActivity(cached)
+      return
+    }
+
     const events = await fetchGitHubActivity(username);
+    saveToCache(username, events)
     displayActivity(events);
   } catch (error) {
     console.error('Error:', error.message);
