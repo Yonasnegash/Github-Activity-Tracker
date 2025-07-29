@@ -36,17 +36,6 @@ function saveToCache(dir, filename, data) {
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
 }
 
-
-function saveActivityToCache(username, data) {
-  const filePath = path.join(ACTIVITY_CACHE_DIR, `${username}.json`)
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8')
-}
-
-function saveUserInfoToCache(username, data) {
-  const userInfoPath = path.join(USER_INFO_CACHE_DIR, `${username}.json`)
-  fs.writeFileSync(userInfoPath, JSON.stringify(data, null, 2), 'utf-8')
-}
-
 function prompt(callback) {
     const rl = readline.createInterface({
         input: process.stdin,
