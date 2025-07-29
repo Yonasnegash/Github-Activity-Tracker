@@ -13,8 +13,6 @@ A simple command-line tool to fetch and display the recent public activity of a 
 - Caches data locally for 10 minutes to reduce API calls
 - Handles invalid usernames and API errors gracefully
 
----
-
 ## 📦 Installation
 
 1. Clone this repository:
@@ -48,10 +46,12 @@ Fetched user activity is saved in a .cache/ folder and reused if it’s less tha
 
 ## 📁 Project Structure
 
+```graphql
 github-user-activity-cli/
 ├── index.js        # Main CLI script
 ├── .cache/         # Cached JSON responses (auto-created)
 └── README.md
+```
 
 ## 📚 Learning Goals
 

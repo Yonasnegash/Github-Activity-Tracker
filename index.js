@@ -3,33 +3,48 @@ const readline = require('readline')
 const fs = require('fs')
 const path = require('path')
 
-const CACHE_DIR = path.join(__dirname, '.cache')
+const ACTIVITY_CACHE_DIR = path.join(__dirname, '.cache/activity')
+const USER_INFO_CACHE_DIR = path.join(__dirname, '.cache/user-info')
 
 const usernameFromArg = process.argv[2]
 
-if (!fs.existsSync(CACHE_DIR)) {
-  fs.mkdirSync(CACHE_DIR)
+if (!fs.existsSync(ACTIVITY_CACHE_DIR)) {
+  fs.mkdirSync(ACTIVITY_CACHE_DIR)
 }
 
-function loadFromCatche(username) {
-  const filePath = path.join(CACHE_DIR, `${username}.json`)
+if (!fs.existsSync(USER_INFO_CACHE_DIR)) {
+  fs.mkdirSync(USER_INFO_CACHE_DIR)
+}
 
-  if(!fs.existsSync(filePath)) return null
+function loadFromCache(dir, filename) {
+  const filePath = path.join(dir, `${filename}.json`);
+  if (!fs.existsSync(filePath)) return null;
 
-  const stats = fs.statSync(filePath)
-  const cacheAge = (Date.now() - stats.mtime) / (1000 * 60)
+  const stats = fs.statSync(filePath);
+  const cacheAge = (Date.now() - stats.mtime) / (1000 * 60); // minutes
 
   if (cacheAge < 10) {
-    const data = fs.readFileSync(filePath, 'utf8')
-    return JSON.parse(data)
+    const data = fs.readFileSync(filePath, 'utf-8');
+    return JSON.parse(data);
   }
 
-  return null
+  return null;
 }
 
-function saveToCache(username, data) {
-  const filePath = path.join(CACHE_DIR, `${username}.json`)
+function saveToCache(dir, filename, data) {
+  const filePath = path.join(dir, `${filename}.json`);
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+}
+
+
+function saveActivityToCache(username, data) {
+  const filePath = path.join(ACTIVITY_CACHE_DIR, `${username}.json`)
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8')
+}
+
+function saveUserInfoToCache(username, data) {
+  const userInfoPath = path.join(USER_INFO_CACHE_DIR, `${username}.json`)
+  fs.writeFileSync(userInfoPath, JSON.stringify(data, null, 2), 'utf-8')
 }
 
 function prompt(callback) {
@@ -128,22 +143,70 @@ function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
+function fetchUserInfo(username) {
+  const options = {
+    hostname: 'api.github.com',
+    path: `/users/${username}`,
+    method: 'GET',
+    headers: {
+      'User-Agent': 'github-activity-cli',
+      'Accept': 'application/vnd.github.v3+json'
+    }
+  };
+
+  return new Promise((resolve, reject) => {
+    const req = https.request(options, (res) => {
+      let data = '';
+
+      res.on('data', chunk => data += chunk)
+      res.on('end', () => {
+        if (res.statusCode !== 200) return reject(new Error('Could not fetch user profile.'));
+        try {
+          resolve(JSON.parse(data));
+        } catch (e) {
+          reject(new Error('Invalid JSON for user profile.'));
+        }
+      })
+    })
+
+    req.on('error', (err) => reject(err))
+    req.end()
+  })
+}
+
+function displayUserInfo(user) {
+  console.log(`\n👤 ${user.name || user.login}`);
+  if (user.bio) console.log(`📝 ${user.bio}`);
+  console.log(`🌍 ${user.location || 'Location not specified'}`);
+  console.log(`📦 Public Repos: ${user.public_repos} | 👥 Followers: ${user.followers}`);
+}
+
 // main function
 async function main() {
   try {
     const username = await getUsername();
-    console.log(`Fetching activity for ${username}...`);
+    console.log(`Fetching activity and user info for ${username}...`);
 
-    const cached = loadFromCatche(username)
-    if (cached) {
-      console.log('(Loaded from cache')
-      displayActivity(cached)
-      return
+    const cachedActivity = loadFromCache(ACTIVITY_CACHE_DIR, username);
+    const cachedUserInfo = loadFromCache(USER_INFO_CACHE_DIR, username);
+    
+    if (cachedActivity) {
+      console.log('(Loaded activity from cache)');
+      displayActivity(cachedActivity);
+    } else {
+      const events = await fetchGitHubActivity(username);
+      saveToCache(ACTIVITY_CACHE_DIR, username, events);
+      displayActivity(events);
     }
 
-    const events = await fetchGitHubActivity(username);
-    saveToCache(username, events)
-    displayActivity(events);
+    if (cachedUserInfo) {
+      console.log('(Loaded user info from cache)');
+      displayUserInfo(cachedUserInfo);
+    } else {
+      const userInfo = await fetchUserInfo(username);
+      saveToCache(USER_INFO_CACHE_DIR, username, userInfo);
+      displayUserInfo(userInfo);
+    }
   } catch (error) {
     console.error('Error:', error.message);
   }
